@@ -168,9 +168,36 @@ ORDER BY
 
 <img width="1323" height="366" alt="SS 1" src="https://github.com/user-attachments/assets/7939fd52-2cf8-40c0-ad77-91548aa7f857" />
 
-## Gross monthly total sales report for Croma
+## Task 2: Gross monthly total sales report for Croma
 
+Descripton Given:
 
+  As a Product Owner, I need to aggregate the monthly gross sales report for Croma India customer so that I can track how much sales this particular customer is generating for AtliQ and manage our relationships accordingly.
 
+The report should have the following fields:
+* Month
+* Total gross sales amount to Croma India in this month
 
+### My Query
+
+```SQL
+SELECT
+	s.date,
+    ROUND(SUM(g.gross_price * s.sold_quantity), 2) AS gross_price_total
+FROM fact_sales_monthly AS s
+INNER JOIN fact_gross_price AS g
+	ON g.product_code = s.product_code AND
+		g.fiscal_year = get_fiscal_year(s.date)
+WHERE
+	customer_code = 90002002
+GROUP BY
+	s.date
+ORDER BY
+	s.date ASC;
+```
+### Here is an excerpt of the result:
+
+<img width="1330" height="323" alt="SS 2" src="https://github.com/user-attachments/assets/35cca433-b451-47b4-940a-543412dd2284" />
+
+## Task 3: 
 
