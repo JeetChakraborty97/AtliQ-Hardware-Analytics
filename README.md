@@ -59,12 +59,109 @@ WHERE
 -- The customer code for Croma is 90002002
 ```
 
+### Let's see the transaction for Croma India
 
+```SQL
+SELECT
+	*
+FROM fact_sales_monthly
+WHERE
+	customer_code = 90002002 AND
+	YEAR(date) = 2021
+ORDER BY
+	date DESC;
+-- product level aggregated sold quantity is already provided
+-- Although the dates are in Calendar Date format, they need to be converted
+-- FY for AtliQ Hardware starts from September, so I have to add +4 months to get the FY from Calendar Date
+```
 
+### Let's create Calendar Date
 
+```SQL
+SELECT
+	*
+FROM fact_sales_monthly
+WHERE
+	customer_code = 90002002 AND
+	YEAR(DATE_ADD(date, INTERVAL 4 MONTH)) = 2021
+ORDER BY
+	date ASC;
+```
 
+### To make this repeatable, created a new User-Defined Function named "get-fiscal-year":
 
+```SQL
+USE `gdb0041`;
+DROP function IF EXISTS `get_fiscal_year`;
 
+DELIMITER $$
+CREATE FUNCTION `get_fiscal_year` (
+    calendar_date DATE
+)
+RETURNS INTEGER
+DETERMINISTIC
+BEGIN
+    DECLARE fiscal_year INT;
+    SET fiscal_year = YEAR(DATE_ADD(calendar_date, INTERVAL 4 MONTH));
+    RETURN fiscal_year;
+END$$
+
+DELIMITER ;
+
+-- Updated Query:
+
+SELECT
+	*
+FROM fact_sales_monthly
+WHERE
+	customer_code = 90002002 AND
+	get_fiscal_year(date) = 2021
+ORDER BY
+	date ASC;
+```
+
+### Now I need to get Product Name & Variants which are present in dim_product
+
+```SQL
+SELECT
+	s.date,
+    s.product_code,
+    p.product,
+    p.variant,
+    s.sold_quantity
+FROM fact_sales_monthly AS s
+INNER JOIN dim_product AS p
+	ON p.product_code = s.product_code
+WHERE
+	customer_code = 90002002 AND
+	get_fiscal_year(date) = 2021
+ORDER BY
+	date ASC;
+```
+
+### Now I need to get Gross Price Per Item & Gross Price Total which are present in fact_gross_price
+
+```SQL
+SELECT
+	s.date,
+    s.product_code,
+    p.product,
+    p.variant,
+    s.sold_quantity,
+    ROUND(g.gross_price, 2) AS gross_price,
+    ROUND(g.gross_price * s.sold_quantity, 2) AS gross_price_total
+FROM fact_sales_monthly AS s
+INNER JOIN dim_product AS p
+	ON p.product_code = s.product_code
+INNER JOIN fact_gross_price AS g
+	ON g.product_code = s.product_code AND
+		g.fiscal_year = get_fiscal_year(s.date)
+WHERE
+	customer_code = 90002002 AND
+	get_fiscal_year(date) = 2021
+ORDER BY
+	date ASC;
+```
 
 
 
