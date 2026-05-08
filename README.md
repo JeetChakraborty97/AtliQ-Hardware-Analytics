@@ -164,7 +164,11 @@ ORDER BY
 	date ASC;
 ```
 
+### Here is an excerpt of the result:
 
+<img width="1323" height="366" alt="SS 1" src="https://github.com/user-attachments/assets/7939fd52-2cf8-40c0-ad77-91548aa7f857" />
+
+## Gross monthly total sales report for Croma
 
 
 
