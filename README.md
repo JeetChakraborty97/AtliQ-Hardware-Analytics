@@ -18,6 +18,7 @@ As a Data Analyst at **AtliQ Hardware**, I get various tasks from the product ow
 
 * SQL
 * MySQL
+* Microsoft Excel
 * Jira (Tasks were provided in Jira in the Bootcamp)
 
 # Default Tables
