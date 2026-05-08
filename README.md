@@ -195,9 +195,104 @@ GROUP BY
 ORDER BY
 	s.date ASC;
 ```
+
 ### Here is an excerpt of the result:
 
 <img width="1330" height="323" alt="SS 2" src="https://github.com/user-attachments/assets/35cca433-b451-47b4-940a-543412dd2284" />
 
-## Task 3: 
+## Task 3: Yearly report for Croma India
+
+Description Given:
+
+  Generate a yearly report for Croma India where there are two columns:
+* Fiscal Year
+* Total Gross Sales amount In that year from Croma
+
+### My Query
+
+```SQL
+SELECT
+	get_fiscal_year(date) AS fiscal_year,
+    SUM(ROUND(sold_quantity*g.gross_price, 2)) AS yearly_gross_sales
+FROM fact_sales_monthly AS s
+INNER JOIN fact_gross_price AS g
+	ON g.fiscal_year = get_fiscal_year(s.date) AND
+		g.product_code = s.product_code
+WHERE
+	customer_code = 90002002
+GROUP BY
+	get_fiscal_year(date)
+ORDER BY
+	fiscal_year ASC;
+```
+
+### Here is the result:
+
+<img width="1326" height="192" alt="SS 3" src="https://github.com/user-attachments/assets/ebca0f8b-ddaa-415f-9641-630fb10eb3cc" />
+
+## Task 4: Create a Stored Procedure for customer-level monthly gross sales report
+
+Description Given
+
+  As a data analyst, I want to create a stored procedure for customer-level monthly gross sales report so that I don't have to manually modify the query every time. The stored procedure can also be run by other users too (who have limited access to the database) and they can generate this report without having to involve the data analytics team.
+
+The report should have the following columns:
+* Month
+* Total gross sales in that month from a given customer
+
+### So, I created a stored procedure called "get_monthly_gross_sales_for_customer":
+
+```SQL
+USE `gdb0041`;
+DROP procedure IF EXISTS `get_monthly_gross_sales_for_customer`;
+
+DELIMITER $$
+USE `gdb0041`$$
+CREATE PROCEDURE `get_monthly_gross_sales_for_customer` (
+	cust_code INT
+)
+BEGIN
+	SELECT
+		s.date,
+		ROUND(SUM(g.gross_price * s.sold_quantity), 2) AS gross_price_total
+	FROM fact_sales_monthly AS s
+	INNER JOIN fact_gross_price AS g
+		ON g.product_code = s.product_code AND
+			g.fiscal_year = get_fiscal_year(s.date)
+	WHERE
+		customer_code = cust_code
+	GROUP BY
+		s.date
+	ORDER BY
+		s.date ASC;
+END$$
+
+DELIMITER ;
+
+-- Updated Query:
+
+CALL gdb0041.get_monthly_gross_sales_for_customer(90002002);
+-- Now, I only have to call it and mention the customer_code in the parentheses.
+-- And other team members can also use it.
+```
+
+### Here is an excerpt of the result:
+
+<img width="1326" height="353" alt="SS 4" src="https://github.com/user-attachments/assets/61c64f6c-5989-4b9e-ae37-3c768bfdd4c1" />
+
+## Task 5: 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
