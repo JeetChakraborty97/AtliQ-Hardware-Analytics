@@ -396,6 +396,207 @@ ORDER BY
 	date ASC;
 ```
 
+### The Query takes time to load.
+### After using EXPLAIN ANALYZE, the issue seems to be coming from repetitive use of get_fiscal_year on rows
+### Created a new dim_date table to establish mapping:
+
+```SQL
+CREATE TABLE `gdb0041`.`dim_date` (
+  `calendar_date` DATE NOT NULL,
+  `fiscal_year` YEAR GENERATED ALWAYS AS (YEAR(DATE_ADD(calendar_date, INTERVAL 4 MONTH))) VIRTUAL,
+  PRIMARY KEY (`calendar_date`));
+
+-- Created a .csv file on Excel to import the necessary dates.
+-- Imported the data into the dim_date table
+
+-- Updated Query:
+
+SELECT
+	s.date,
+    s.product_code,
+    p.product,
+    p.variant,
+    s.sold_quantity,
+    ROUND(g.gross_price, 2) AS gross_price,
+    ROUND(g.gross_price * s.sold_quantity, 2) AS gross_price_total,
+    pre.pre_invoice_discount_pct
+FROM fact_sales_monthly AS s
+INNER JOIN dim_product AS p
+	ON p.product_code = s.product_code
+INNER JOIN dim_date AS dt
+	ON dt.calendar_date = s.date
+INNER JOIN fact_gross_price AS g
+	ON g.product_code = s.product_code AND
+		g.fiscal_year = dt.fiscal_year
+INNER JOIN fact_pre_invoice_deductions AS pre
+	ON pre.customer_code = s.customer_code AND
+		pre.fiscal_year = dt.fiscal_year
+WHERE
+	dt.fiscal_year = 2021
+ORDER BY
+	date ASC;
+
+-- Reduced more than 1 sec in the Duration of the query.
+```
+
+### Also added fiscal_year column in the fact_sales_monthly table for easier querying:
+
+```SQL
+ALTER TABLE `gdb0041`.`fact_sales_monthly` 
+ADD COLUMN `fiscal_year` YEAR GENERATED ALWAYS AS (YEAR(DATE_ADD('date', INTERVAL 4 MONTH))) VIRTUAL AFTER `date`,
+DROP PRIMARY KEY,
+ADD PRIMARY KEY (`date`, `product_code`, `customer_code`);
+;
+
+-- Updated Query:
+
+SELECT
+	s.date,
+    s.product_code,
+    p.product,
+    p.variant,
+    s.sold_quantity,
+    ROUND(g.gross_price, 2) AS gross_price,
+    ROUND(g.gross_price * s.sold_quantity, 2) AS gross_price_total,
+    pre.pre_invoice_discount_pct
+FROM fact_sales_monthly AS s
+INNER JOIN dim_product AS p
+	ON p.product_code = s.product_code
+INNER JOIN fact_gross_price AS g
+	ON g.product_code = s.product_code AND
+		g.fiscal_year = s.fiscal_year
+INNER JOIN fact_pre_invoice_deductions AS pre
+	ON pre.customer_code = s.customer_code AND
+		pre.fiscal_year = s.fiscal_year
+WHERE
+	s.fiscal_year = 2021
+ORDER BY
+	date ASC;
+    
+-- Reduced more than 3 sec in the Duration of the query.
+```
+
+### Now I need to get net invoice sales.
+
+```SQL
+-- Updated Query:
+
+WITH cte_1 AS
+	(SELECT
+		s.date,
+		s.product_code,
+		p.product,
+		p.variant,
+		s.sold_quantity,
+		ROUND(g.gross_price, 2) AS gross_price,
+		ROUND(g.gross_price * s.sold_quantity, 2) AS gross_price_total,
+		pre.pre_invoice_discount_pct
+	FROM fact_sales_monthly AS s
+	INNER JOIN dim_product AS p
+		ON p.product_code = s.product_code
+	INNER JOIN fact_gross_price AS g
+		ON g.product_code = s.product_code AND
+			g.fiscal_year = s.fiscal_year
+	INNER JOIN fact_pre_invoice_deductions AS pre
+		ON pre.customer_code = s.customer_code AND
+			pre.fiscal_year = s.fiscal_year
+	WHERE
+		s.fiscal_year = 2021
+	ORDER BY
+		date ASC)
+SELECT
+	*,
+    (gross_price_total - gross_price_total * pre_invoice_discount_pct) AS net_invoice_sales
+						-- Used CTE as a derived field like 'gross_price_total' can't be used in the same query.
+FROM cte_1;
+```
+
+### Realising this will get bigger and bigger, I created a view called "sales_preinv_discount":
+
+```SQL
+USE `gdb0041`;
+CREATE  OR REPLACE VIEW `sales_preinv_discount` AS
+	SELECT
+		s.date,
+        s.fiscal_year,
+        s.customer_code,
+        c.market,
+		s.product_code,
+		p.product,
+		p.variant,
+		s.sold_quantity,
+		ROUND(g.gross_price, 2) AS gross_price,
+		ROUND(g.gross_price * s.sold_quantity, 2) AS gross_price_total,
+		pre.pre_invoice_discount_pct
+	FROM fact_sales_monthly AS s
+    INNER JOIN dim_customer AS c
+		ON s.customer_code = c.customer_code
+	INNER JOIN dim_product AS p
+		ON p.product_code = s.product_code
+	INNER JOIN fact_gross_price AS g
+		ON g.product_code = s.product_code AND
+			g.fiscal_year = s.fiscal_year
+	INNER JOIN fact_pre_invoice_deductions AS pre
+		ON pre.customer_code = s.customer_code AND
+			pre.fiscal_year = s.fiscal_year
+	ORDER BY
+		date ASC;
+
+-- Updated Query:
+
+SELECT
+	*,
+    ROUND(((1 - pre_invoice_discount_pct) * gross_price_total), 2) AS net_invoice_sales
+FROM sales_preinv_discount;
+```
+
+### Now I need to get the net sales.
+### So I created another view called 'sales_postinv_discount':
+
+```SQL
+USE `gdb0041`;
+CREATE  OR REPLACE VIEW `sales_postinv_discount` AS
+	SELECT
+		s.date,
+        s.fiscal_year,
+        s.customer_code,
+        s.market,
+        s.product_code,
+        s.product,
+        s.variant,
+        s.sold_quantity,
+        s.gross_price_total,
+        s.pre_invoice_discount_pct,
+		ROUND((s.gross_price_total - s.pre_invoice_discount_pct * s.gross_price_total), 2) AS net_invoice_sales,
+		(po.discounts_pct + po.other_deductions_pct) AS post_invoice_discount_pct
+	FROM sales_preinv_discount AS s
+	INNER JOIN fact_post_invoice_deductions AS po
+		ON po.product_code = s.product_code AND
+			po.customer_code = s.customer_code AND
+            po.date = s.date;
+
+-- Updated Query:
+
+SELECT
+	*,
+    ROUND(((1 - post_invoice_discount_pct) * net_invoice_sales), 2) AS net_sales
+FROM sales_postinv_discount;
+```
+
+### For convenience, created another view called 'net_sales':
+
+```SQL
+USE `gdb0041`;
+CREATE  OR REPLACE VIEW `net_sales` AS
+	SELECT
+		*,
+		ROUND(((1 - post_invoice_discount_pct) * net_invoice_sales), 2) AS net_sales
+	FROM sales_postinv_discount;
+```
+
+
+
+
 
 
 
