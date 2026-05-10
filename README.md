@@ -594,6 +594,160 @@ CREATE  OR REPLACE VIEW `net_sales` AS
 	FROM sales_postinv_discount;
 ```
 
+### For convenience, I also wanted to create a view for gross sales.
+### It should have the following columns:
+* date
+* fiscal_year
+* customer_code
+* customer
+* market
+* product_code
+* product
+* variant
+* sold_quanity
+* gross_price_per_item
+* gross_price_total
+
+```SQL
+USE `gdb0041`;
+CREATE  OR REPLACE VIEW `gross_sales` AS
+	SELECT
+		s.date,
+        s.fiscal_year,
+        s.customer_code,
+        c.customer,
+        c.market,
+        s.product_code,
+        p.product,
+        p.variant,
+        s.sold_quantity,
+        g.gross_price AS gross_price_per_item,
+        ROUND((s.sold_quantity * g.gross_price), 2) AS gross_price_total
+	FROM fact_sales_monthly AS s
+    INNER JOIN dim_product AS p
+		ON s.product_code = p.product_code
+	INNER JOIN dim_customer AS c
+		ON s.customer_code = c.customer_code
+	INNER JOIN fact_gross_price AS g
+		ON g.fiscal_year = s.fiscal_year AND
+			g.product_code = s.product_code;
+```
+
+### Now let's create the market report
+
+```SQL
+SELECT
+	market,
+    ROUND((SUM(net_sales)/1000000), 2) AS net_sales_mln
+FROM net_sales
+WHERE
+	fiscal_year = 2021
+GROUP BY
+	market
+ORDER BY
+	net_sales_mln DESC
+LIMIT 5;
+```
+
+### Here is the result (for convenience, I have limited the results to the top 5):
+
+<img width="1324" height="155" alt="SS 5" src="https://github.com/user-attachments/assets/f11a4def-c768-4dfa-b559-539e3c0df34a" />
+
+### Now, let's create the stored procedure:
+
+```SQL
+USE `gdb0041`;
+DROP procedure IF EXISTS `get_top_n_markets_by_net_sales`;
+
+DELIMITER $$
+USE `gdb0041`$$
+CREATE PROCEDURE `get_top_n_markets_by_net_sales` (
+	in_fiscal_year INT,
+    in_top_n INT
+)
+BEGIN
+	SELECT
+		market,
+		ROUND((SUM(net_sales)/1000000), 2) AS net_sales_mln
+	FROM net_sales
+	WHERE
+		fiscal_year = in_fiscal_year
+	GROUP BY
+		market
+	ORDER BY
+		net_sales_mln DESC
+	LIMIT in_top_n;
+END$$
+
+DELIMITER ;
+
+-- I have kept fiscal_year and top_n as variable for flexibility.
+```
+
+### Now let's create the customer report
+
+```SQL
+SELECT
+	c.customer,
+    ROUND((SUM(net_sales)/1000000), 2) AS net_sales_mln
+FROM net_sales AS ns
+INNER JOIN dim_customer AS c
+	ON c.customer_code = ns.customer_code
+WHERE
+	fiscal_year = 2021
+GROUP BY
+	c.customer
+ORDER BY
+	net_sales_mln DESC
+LIMIT 5;
+```
+
+### Here is the result (for convenience, I have limited the results to the top 5):
+
+<img width="1328" height="161" alt="SS 6" src="https://github.com/user-attachments/assets/890f0a9d-bcbf-40af-8395-bc6ccfc3824f" />
+
+### Now, let's create the stored procedure:
+
+```SQL
+USE `gdb0041`;
+DROP procedure IF EXISTS `get_top_n_customers_by_net_sales`;
+
+DELIMITER $$
+USE `gdb0041`$$
+CREATE PROCEDURE `get_top_n_customers_by_net_sales` (
+	in_market VARCHAR(50),
+    in_fiscal_year INT,
+    in_top_n INT
+)
+BEGIN
+	SELECT
+		c.customer,
+		ROUND((SUM(net_sales)/1000000), 2) AS net_sales_mln
+	FROM net_sales AS ns
+	INNER JOIN dim_customer AS c
+		ON c.customer_code = ns.customer_code
+	WHERE
+		fiscal_year = in_fiscal_year AND
+		s.market = in_market
+	GROUP BY
+		c.customer
+	ORDER BY
+		net_sales_mln DESC
+	LIMIT in_top_n;
+END$$
+
+DELIMITER ;
+
+-- Also added market as an input parameter.
+```
+
+### Now let's create the product report
+
+
+
+
+
+
 
 
 
