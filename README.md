@@ -1234,3 +1234,4 @@ DELIMITER ;
 ```
 
 # Conclusion
+This project demonstrates how AtliQ Hardware could use data analytics to make smarter business decisions by identifying sales trends, analysing customer behaviour, tracking product performance, and uncovering revenue insights that could improve overall business strategy and operational efficiency. By solving multiple real-world business scenarios using MySQL, I strengthened my SQL skills in areas such as joins, aggregations, subqueries, Common Table Expressions (CTEs), filtering, grouping, and analytical querying while also improving my problem-solving ability, analytical thinking, and understanding of how data supports decision-making in a real business environment.
