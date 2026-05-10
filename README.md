@@ -743,6 +743,114 @@ DELIMITER ;
 
 ### Now let's create the product report
 
+```SQL
+SELECT
+	p.product,
+    ROUND((SUM(net_sales)/1000000), 2) AS net_sales_mln
+FROM net_sales AS ns
+INNER JOIN dim_product AS p
+	ON p.product_code = ns.product_code
+WHERE
+	fiscal_year = 2021
+GROUP BY
+	p.product
+ORDER BY
+	net_sales_mln DESC
+LIMIT 5;
+```
+
+### Here is the result (for convenience, I have limited the results to the top 5):
+
+<img width="1326" height="160" alt="SS 7" src="https://github.com/user-attachments/assets/70798fb1-fee5-47b4-99e7-007f8887e2e6" />
+
+### Now, let's create the stored procedure:
+
+```SQL
+USE `gdb0041`;
+DROP procedure IF EXISTS `get_top_n_products_by_net_sales`;
+
+DELIMITER $$
+USE `gdb0041`$$
+CREATE PROCEDURE `get_top_n_products_by_net_sales` (
+	in_fiscal_year INT,
+    in_top_n INT
+)
+BEGIN
+	SELECT
+		p.product,
+		ROUND((SUM(net_sales)/1000000), 2) AS net_sales_mln
+	FROM net_sales AS ns
+	INNER JOIN dim_product AS p
+		ON p.product_code = ns.product_code
+	WHERE
+		fiscal_year = in_fiscal_year
+	GROUP BY
+		p.product
+	ORDER BY
+		net_sales_mln DESC
+	LIMIT in_top_n;
+END$$
+
+DELIMITER ;
+```
+
+## **Task 7: Net sales % share global**
+
+Description Given:
+
+  As a product owner, I want to see a bar chart report for FY 2021 for the top 10 markets by % of net sales.
+
+### My Query
+
+```SQL
+WITH cte_2 AS (
+    SELECT
+        c.customer,
+        ROUND(SUM(ns.net_sales) / 1000000, 2) AS net_sales_mln
+    FROM net_sales AS ns
+    INNER JOIN dim_customer AS c
+        ON c.customer_code = ns.customer_code
+    WHERE
+		fiscal_year = 2021
+    GROUP BY
+		c.customer
+)
+SELECT
+    *,
+    ROUND(net_sales_mln * 100 / SUM(net_sales_mln) OVER(), 2) AS pct
+FROM cte_2
+ORDER BY
+	net_sales_mln DESC;
+
+-- Exported the result in .csv and made the report in Excel.
+```
+
+### Here is an excerpt of the exported table in Excel:
+
+<img width="1311" height="685" alt="SS 8" src="https://github.com/user-attachments/assets/e1e97330-9bad-4eeb-ace0-c3246bc162c5" />
+
+### Here is the bar chart report:
+
+<img width="779" height="622" alt="AtliQ_Hardware_customer_market_share_pct_global_bar_chart_report" src="https://github.com/user-attachments/assets/e8722295-8767-45f5-9f6b-2100fd6f4d36" />
+
+## **Task 8: Net sales share % by region**
+
+Description Given:
+
+  As a product owner, I want to see region-wise (APAC, EU, LTAM, etc.) % net sales breakdown by customers in a respective region, so that I can perform my regional analysis on financial performance of the company.
+
+The end result should be bar charts for FY 2021.
+
+Also, build a reusable asset we can use to conduct this analysis for any financial year.
+
+### My Query
+
+```SQL
+
+```
+
+
+
 
 
 
