@@ -846,21 +846,160 @@ Also, build a reusable asset we can use to conduct this analysis for any financi
 ### My Query
 
 ```SQL
+WITH cte_2 AS (
+    SELECT
+        c.customer,
+        ROUND(SUM(ns.net_sales) / 1000000, 2) AS net_sales_mln
+    FROM net_sales AS ns
+    INNER JOIN dim_customer AS c
+        ON c.customer_code = ns.customer_code
+    WHERE
+		fiscal_year = 2021
+    GROUP BY
+		c.customer
+)
+SELECT
+    *,
+    ROUND(net_sales_mln * 100 / SUM(net_sales_mln) OVER(), 2) AS pct
+FROM cte_2
+ORDER BY
+	net_sales_mln DESC;
 
+WITH cte_3 AS
+(
+	SELECT
+        c.customer,
+        c.region,
+        ROUND(SUM(ns.net_sales) / 1000000, 2) AS net_sales_mln
+    FROM net_sales AS ns
+    INNER JOIN dim_customer AS c
+        ON c.customer_code = ns.customer_code
+    WHERE
+		fiscal_year = 2021
+    GROUP BY
+		c.customer,
+        c.region
+)
+SELECT
+	*,
+    ROUND(net_sales_mln * 100 / SUM(net_sales_mln) OVER (PARTITION BY region), 2) AS pct_share_region
+FROM cte_3
+ORDER BY
+	region ASC,
+    net_sales_mln DESC;
+
+-- Exported the result in .csv and made the report in Excel.
+
+-- Kept till top 10 for each report, except for the LATAM report, which had 3 customers.
 ```
 
+### Here is an excerpt of the result:
 
+<img width="1230" height="433" alt="SS 9" src="https://github.com/user-attachments/assets/7a0cf866-2cb4-4c1f-91cb-19566ee0972e" />
 
+### Here is the APAC region report:
 
+<img width="775" height="495" alt="APAC Report (AtliQ_Hardware_customer_region wise_share_pct)" src="https://github.com/user-attachments/assets/d75c6e7a-307b-445e-bc9e-99129b03f841" />
 
+### Here is the EU region report:
 
+<img width="772" height="493" alt="EU Report (AtliQ_Hardware_customer_region wise_share_pct)" src="https://github.com/user-attachments/assets/07fdd2ac-03f4-40ca-9068-0d2f232a75dc" />
 
+### Here is the LATAM region report:
 
+<img width="773" height="489" alt="LATAM Report (AtliQ_Hardware_customer_region wise_share_pct)" src="https://github.com/user-attachments/assets/fa00d263-7118-44f2-98e1-f89be7a120cd" />
 
+### Here is the NA region report:
 
+<img width="773" height="494" alt="NA Report (AtliQ_Hardware_customer_region wise_share_pct)" src="https://github.com/user-attachments/assets/9c47293b-8bd0-440e-a7c1-ec0446fb6da3" />
 
+## **Task 9: Get top n products in each division by their quality sold**
 
+Description Given:
 
+  Write a stored procedure for getting the top n products in each division by their quantity sold in a given financial year.
 
+### My Query
+
+```SQL
+WITH cte_1 AS
+(
+	SELECT
+		p.division,
+		p.product,
+		SUM(sold_quantity) AS total_sold_quantity
+	FROM fact_sales_monthly AS s
+	INNER JOIN dim_product AS p
+		ON p.product_code = s.product_code
+	WHERE
+		fiscal_year = 2021
+	GROUP BY
+		p.division,
+		p.product
+), 
+cte_2 AS
+(
+	SELECT
+		*,
+		DENSE_RANK() OVER(PARTITION BY division ORDER BY total_sold_quantity DESC) AS drnk
+	FROM cte_1
+)
+SELECT
+	*
+FROM cte_2
+WHERE
+	drnk <= 3;
+```
+
+### Here is the result (for testing, I have set the FY to 2021):
+
+<img width="1215" height="263" alt="SS 10" src="https://github.com/user-attachments/assets/47f0ae49-9a98-467d-802b-80a9c293708a" />
+
+### Now, let's create a stored procedure for it:
+
+```SQL
+USE `gdb0041`;
+DROP procedure IF EXISTS `get_top_n_products_per_division_by_qty_sold`;
+
+DELIMITER $$
+USE `gdb0041`$$
+CREATE PROCEDURE `get_top_n_products_per_division_by_qty_sold` (
+	in_fiscal_year INT,
+    in_top_n INT
+)
+BEGIN
+	WITH cte_1 AS
+	(
+		SELECT
+			p.division,
+			p.product,
+			SUM(sold_quantity) AS total_sold_quantity
+		FROM fact_sales_monthly AS s
+		INNER JOIN dim_product AS p
+			ON p.product_code = s.product_code
+		WHERE
+			fiscal_year = in_fiscal_year
+		GROUP BY
+			p.division,
+			p.product
+	), 
+	cte_2 AS
+	(
+		SELECT
+			*,
+			DENSE_RANK() OVER(PARTITION BY division ORDER BY total_sold_quantity DESC) AS drnk
+		FROM cte_1
+	)
+	SELECT
+		*
+	FROM cte_2
+	WHERE
+		drnk <= in_top_n;
+END$$
+
+DELIMITER ;
+```
+
+## **Task 10: **
 
 
